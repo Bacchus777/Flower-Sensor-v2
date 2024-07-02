@@ -91,11 +91,16 @@ const device = {
         await reporting.soil_moisture(firstEndpoint, overrides);
         await reporting.illuminance(firstEndpoint, overrides);
         await reporting.onOff(firstEndpoint, overrides);
+
+        await firstEndpoint.read('msSoilMoisture', [0x0202]);
+        await firstEndpoint.read('msSoilMoisture', [0x0203]);
+
 },
     exposes: [
         e.battery(), 
         e.battery_voltage(),
         e.illuminance(), 
+        e.illuminance_lux(), 
         e.soil_moisture(), 
         e.temperature(),
         e.numeric('threshold', ea.STATE_SET).withValueMin(0).withValueMax(100).withDescription('Minimum soil moisture for binding'),
