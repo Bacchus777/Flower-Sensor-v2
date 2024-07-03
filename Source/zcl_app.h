@@ -24,8 +24,8 @@ extern "C" {
 #define NW_APP_CONFIG                   0x0402
 
 
-#define AIR_COMPENSATION_FORMULA(ADC)   ((0.179 * (double)ADC + 3926.0))
-#define WATER_COMPENSATION_FORMULA(ADC) ((0.146 * (double)ADC + 2020.0))
+#define AIR_COMPENSATION_FORMULA(ADC)   ((0.1844 * (double)ADC + 3679.39))
+#define WATER_COMPENSATION_FORMULA(ADC) ((0.1539 * (double)ADC + 1887.6))
 
 
 

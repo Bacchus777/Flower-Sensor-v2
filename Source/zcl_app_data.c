@@ -115,7 +115,7 @@ const cId_t zclApp_InClusterListFirstEP[] = {ZCL_CLUSTER_ID_GEN_BASIC, POWER_CFG
 
 #define APP_MAX_INCLUSTERS_FIRST_EP (sizeof(zclApp_InClusterListFirstEP) / sizeof(zclApp_InClusterListFirstEP[0]))
 
-const cId_t zclApp_OutClusterListFirstEP[] = {SOIL_MOISTURE};
+const cId_t zclApp_OutClusterListFirstEP[] = {SOIL_MOISTURE, GEN_ON_OFF};
 
 #define APP_MAX_OUTCLUSTERS_FIRST_EP (sizeof(zclApp_OutClusterListFirstEP) / sizeof(zclApp_OutClusterListFirstEP[0]))
 
