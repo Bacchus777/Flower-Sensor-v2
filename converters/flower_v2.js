@@ -25,7 +25,7 @@ const fz_local = {
                 result.threshold = msg.data[0x0202];
             }
             if (msg.data.hasOwnProperty(0x0203)) {
-                result.threshold = msg.data[0x0203];
+                result.interval = msg.data[0x0203];
             }
             return result;
         },
