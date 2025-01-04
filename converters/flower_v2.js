@@ -100,7 +100,6 @@ const device = {
         e.battery(), 
         e.battery_voltage(),
         e.illuminance(), 
-        e.illuminance_lux(), 
         e.soil_moisture(), 
         e.temperature(),
         e.numeric('threshold', ea.STATE_SET).withValueMin(0).withValueMax(100).withDescription('Minimum soil moisture for binding'),
