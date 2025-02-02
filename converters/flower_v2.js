@@ -30,6 +30,23 @@ const fz_local = {
             return result;
         },
     },
+    fs_illuminance: {
+        cluster: 'msIlluminanceMeasurement',
+        type: ['attributeReport', 'readResponse'],
+        convert: (model, msg, publish, options, meta) => {
+            const result = {};
+            if (msg.data.hasOwnProperty(0xF001)) {
+                result.illuminance_threshold = msg.data[0xF001];
+            }
+            if (msg.data.hasOwnProperty('measuredValue')) {
+                const illuminance_raw = msg.data['measuredValue'];
+                const illuminance = illuminance_raw === 0 ? 0 : Math.pow(10, (illuminance_raw - 1) / 10000);
+                result.illuminance = illuminance;
+                result.illuminance_raw = illuminance_raw;
+                }
+            return result;
+        },
+    },
 };
 
 const tz_local = {
@@ -67,11 +84,11 @@ const device = {
     fromZigbee: [
         fz.temperature, 
         fz.humidity, 
-        fz.illuminance, 
         fz.battery,
         fz.soil_moisture,
         fz.on_off,
         fz_local.soil_moisture_config,
+        fz_local.fs_illuminance,
     ],
     toZigbee: [
         tz.factory_reset,
@@ -99,7 +116,8 @@ const device = {
     exposes: [
         e.battery(), 
         e.battery_voltage(),
-        e.illuminance(), 
+    	e.numeric('illuminance_raw', ACCESS_STATE).withDescription('Measured illuminance for threshold'),
+		e.numeric('illuminance', ACCESS_STATE).withDescription('Measured illuminance in lux').withUnit('lx'),
         e.soil_moisture(), 
         e.temperature(),
         e.numeric('threshold', ea.STATE_SET).withValueMin(0).withValueMax(100).withDescription('Minimum soil moisture for binding'),
