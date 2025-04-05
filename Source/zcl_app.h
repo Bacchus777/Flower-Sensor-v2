@@ -24,10 +24,8 @@ extern "C" {
 #define NW_APP_CONFIG                   0x0402
 
 
-#define AIR_COMPENSATION_FORMULA(ADC)   ((0.1844 * (double)ADC + 3679.39))
-#define WATER_COMPENSATION_FORMULA(ADC) ((0.1539 * (double)ADC + 1887.6))
-
-
+#define AIR_COMPENSATION_FORMULA(ADC)   ((0.179 * (double)ADC + 3140.0))
+#define WATER_COMPENSATION_FORMULA(ADC) ((0.146 * (double)ADC + 1980.0))
 
 #define APP_REPORT_DELAY ((uint32) 1800000) //30 minutes
 
