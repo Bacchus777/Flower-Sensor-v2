@@ -180,10 +180,18 @@ extern void MAC_RfFrontendSetup(void);
 #endif
 
 //power pin
-#define LED4_BV           BV(1)
-#define LED4_SBIT         P1_1
-#define LED4_DDR          P1DIR
-#define LED4_POLARITY     ACTIVE_HIGH
+#if defined(HAL_PA_LNA)
+  #define LED4_BV           BV(0)
+  #define LED4_SBIT         P1_0
+  #define LED4_DDR          P1DIR
+  #define LED4_POLARITY     ACTIVE_HIGH
+#else
+  #define LED4_BV           BV(1)
+  #define LED4_SBIT         P1_1
+  #define LED4_DDR          P1DIR
+  #define LED4_POLARITY     ACTIVE_HIGH
+#endif
+
 
 #define HAL_TURN_OFF_LED1()       st( LED1_SBIT = LED1_POLARITY (0); )
 #define HAL_TURN_OFF_LED2()       asm("NOP")

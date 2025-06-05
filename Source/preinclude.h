@@ -42,8 +42,6 @@
 
 #define BDB_MAX_CLUSTERENDPOINTS_REPORTING 10
 
-#define BME280_32BIT_ENABLE
-//TODO: refactor ds18b20 driver
 #define DS18B20_PORT 1
 #define DS18B20_PIN 3
 
@@ -52,7 +50,7 @@
 #define TSENS_DIR P1DIR
 
 #define SOIL_MOISTURE_PORT 0
-#define SOIL_MOISTURE_PIN 4
+#define SOIL_MOISTURE_PIN 3
 
 #define LUMOISITY_PORT 0
 #define LUMOISITY_PIN 7

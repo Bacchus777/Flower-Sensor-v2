@@ -32,7 +32,6 @@
 #include "ds18b20.h"
 #include "hal_adc.h"
 #include "hal_drivers.h"
-#include "hal_i2c.h"
 #include "hal_key.h"
 #include "hal_led.h"
 
@@ -126,7 +125,7 @@ static zclGeneral_AppCallbacks_t zclApp_CmdCallbacks = {
 
 void zclApp_Init(byte task_id) {
     IO_IMODE_PORT_PIN(SOIL_MOISTURE_PORT, SOIL_MOISTURE_PIN, IO_TRI); // tri state p0.4 (soil humidity pin)
-    IO_IMODE_PORT_PIN(LUMOISITY_PORT, LUMOISITY_PIN, IO_TRI);         // tri state p0.7 (lumosity pin)
+    IO_IMODE_PORT_PIN(LUMOISITY_PORT, LUMOISITY_PIN, IO_TRI);         // tri state p0.6 (lumosity pin)
     IO_PUD_PORT(OCM_CLK_PORT, IO_PUP);
     IO_PUD_PORT(OCM_DATA_PORT, IO_PUP)
     IO_PUD_PORT(DS18B20_PORT, IO_PUP);
@@ -247,12 +246,23 @@ static void zclApp_RestoreAttributesFromNV(void) {
 }
 
 static void zclApp_InitPWM(void) {
-    PERCFG &= ~(0x20); // Select Timer 3 Alternative 1 location
+#if defined(HAL_PA_LNA) 
+    PERCFG |= 0x20; // Select Timer 3 Alternative 1 location
+#else
+    PERCFG &= ~(0x20); // Select Timer 3 Alternative 2 location
+#endif
+                                
     P2SEL |= 0x20;
     P2DIR |= 0xC0;  // Give priority to Timer 1 channel2-3
+
+#if defined(HAL_PA_LNA) 
+    P1SEL |= BV(7); // Set P1_7 to peripheral, Timer 1,channel 1
+    P1DIR |= BV(7);
+#else
     P1SEL |= BV(4); // Set P1_4 to peripheral, Timer 1,channel 2
     P1DIR |= BV(4);
-
+#endif                                                     
+    
     T3CTL &= ~BV(4); // Stop timer 3 (if it was running)
     T3CTL |= BV(2);  // Clear timer 3
     T3CTL &= ~0x08;  // Disable Timer 3 overflow interrupts
