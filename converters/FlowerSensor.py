@@ -18,11 +18,11 @@ from zigpy.zcl.foundation import ZCLAttributeDef
 _LOGGER = logging.getLogger(__name__)
 
 class BWSoilMoisture(CustomCluster, SoilMoisture):
-    """Bacchus Occupancy cluster."""
+    """Bacchus Soil Moisture cluster."""
 
     cluster_id = 0x0408
     class AttributeDefs(SoilMoisture.AttributeDefs):
-        """Bacchus Occupancy cluster attributes."""
+        """Bacchus Soil Moisture cluster attributes."""
 
         # This attribute specifies the demand of a switched load when it is energised
         bw_report_delay: Final = ZCLAttributeDef(
