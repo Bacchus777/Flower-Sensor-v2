@@ -131,7 +131,6 @@ void zclApp_Init(byte task_id) {
     IO_PUD_PORT(DS18B20_PORT, IO_PUP);
     POWER_OFF_SENSORS();
 
-    HalI2CInit();
     zclApp_InitPWM();
     // this is important to allow connects throught routers
     // to make this work, coordinator should be compiled with this flag #define TP2_LEGACY_ZC

@@ -3428,15 +3428,6 @@
     <group>
         <name>App</name>
         <file>
-            <name>$PROJ_DIR$\..\BME280_driver\bme280.c</name>
-        </file>
-        <file>
-            <name>$PROJ_DIR$\..\BME280_driver\bme280.h</name>
-        </file>
-        <file>
-            <name>$PROJ_DIR$\..\BME280_driver\bme280_defs.h</name>
-        </file>
-        <file>
             <name>$PROJ_DIR$\..\zstack-lib\hal_key.c</name>
         </file>
         <file>

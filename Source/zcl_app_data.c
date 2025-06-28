@@ -66,7 +66,7 @@ const uint8 zclApp_PowerSource = POWER_SOURCE_BATTERY;
 
 
 #define DEFAULT_Threshold       50
-#define DEFAULT_Interval        30
+#define DEFAULT_Interval        10
 
 
 application_config_t zclApp_Config = {
