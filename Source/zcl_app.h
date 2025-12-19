@@ -59,6 +59,7 @@ extern "C" {
 #define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_BATTERY_RAW_ADC      0x0201
 #define ATTRID_MS_THRESHOLD                                             0x0202
 #define ATTRID_MS_INTERVAL                                              0x0203
+#define ATTRID_POWER_TX_POWER                                           0x0204
 
 /*********************************************************************
  * TYPEDEFS
@@ -67,6 +68,7 @@ extern "C" {
 typedef struct {
     uint16    Threshold;
     uint16    Interval;
+    int8      Power;
 } application_config_t;
 
 

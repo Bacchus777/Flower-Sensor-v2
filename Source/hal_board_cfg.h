@@ -180,7 +180,7 @@ extern void MAC_RfFrontendSetup(void);
 #endif
 
 //power pin
-#if defined(HAL_PA_LNA)
+#if defined(HAL_BOARD_FLOWER)
   #define LED4_BV           BV(0)
   #define LED4_SBIT         P1_0
   #define LED4_DDR          P1DIR

@@ -28,7 +28,6 @@
 #include "OnBoard.h"
 
 /* HAL */
-#include "bme280.h"
 #include "ds18b20.h"
 #include "hal_adc.h"
 #include "hal_drivers.h"
@@ -229,6 +228,13 @@ static void zclApp_SaveAttributesToNV(void) {
     uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
     LREP("Saving attributes to NV write=%d\r\n", writeStatus);
     osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, ((uint32) zclApp_Config.Interval * 60 * 1000));
+    LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
+#if defined(HAL_PA_LNA_CC2592) 
+    if (zclApp_Config.Power == 10) 
+        ZMacSetTransmitPower(TX_PWR_PLUS_10);
+    else
+        ZMacSetTransmitPower(TX_PWR_PLUS_19);
+#endif
 }
 
 static void zclApp_RestoreAttributesFromNV(void) {
@@ -241,11 +247,12 @@ static void zclApp_RestoreAttributesFromNV(void) {
     if (status == ZSUCCESS) {
         LREPMaster("Reading from NV\r\n");
         osal_nv_read(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
+    LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
     }
 }
 
 static void zclApp_InitPWM(void) {
-#if defined(HAL_PA_LNA) 
+#if defined(HAL_PA_LNA_CC2592) 
     PERCFG |= 0x20; // Select Timer 3 Alternative 1 location
 #else
     PERCFG &= ~(0x20); // Select Timer 3 Alternative 2 location
@@ -254,7 +261,7 @@ static void zclApp_InitPWM(void) {
     P2SEL |= 0x20;
     P2DIR |= 0xC0;  // Give priority to Timer 1 channel2-3
 
-#if defined(HAL_PA_LNA) 
+#if defined(HAL_PA_LNA_CC2592) 
     P1SEL |= BV(7); // Set P1_7 to peripheral, Timer 1,channel 1
     P1DIR |= BV(7);
 #else

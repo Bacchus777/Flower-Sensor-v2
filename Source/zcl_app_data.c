@@ -61,17 +61,24 @@ const uint8 zclApp_StackVersion = 4;
 
 //{lenght, 'd', 'a', 't', 'a'}
 const uint8 zclApp_ManufacturerName[] = {7, 'B', 'a', 'c', 'c', 'h', 'u', 's'};
+#if defined(HAL_PA_LNA_CC2592) 
+const uint8 zclApp_ModelId[] = {16, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '4'};
+#else
 const uint8 zclApp_ModelId[] = {16, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '2'};
+#endif
+
 const uint8 zclApp_PowerSource = POWER_SOURCE_BATTERY;
 
 
 #define DEFAULT_Threshold       50
 #define DEFAULT_Interval        10
+#define DEFAULT_Power           TX_PWR_PLUS_10
 
 
 application_config_t zclApp_Config = {
     .Threshold =      DEFAULT_Threshold,
-    .Interval =       DEFAULT_Interval,
+    .Interval  =      DEFAULT_Interval,
+    .Power     =      DEFAULT_Power
 };
 
 /*********************************************************************
@@ -94,13 +101,13 @@ CONST zclAttrRec_t zclApp_AttrsFirstEP[] = {
     {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE, ZCL_UINT8, RR, (void *)&zclBattery_Voltage}},
     {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, ZCL_UINT8, RR, (void *)&zclBattery_PercentageRemainig}},
     {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE_RAW_ADC, ZCL_UINT16, RR, (void *)&zclBattery_RawAdc}},
-
+#if defined(HAL_PA_LNA_CC2592) 
+    {POWER_CFG, {ATTRID_POWER_TX_POWER, ZCL_INT8, RW, (void *)&zclApp_Config.Power}},
+#endif
     {ILLUMINANCE, {ATTRID_MS_ILLUMINANCE_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_IlluminanceSensor_MeasuredValue}},
     {TEMP, {ATTRID_MS_TEMPERATURE_MEASURED_VALUE, ZCL_INT16, RR, (void *)&zclApp_DS18B20_MeasuredValue}},
 
     {SOIL_MOISTURE, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_SoilHumiditySensor_MeasuredValue}},
-    {SOIL_MOISTURE, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_RAW_ADC, ZCL_UINT16, RR, (void *)&zclApp_SoilHumiditySensor_MeasuredValueRawAdc}},
-    {SOIL_MOISTURE, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_BATTERY_RAW_ADC, ZCL_UINT16, RR, (void *)&zclBattery_RawAdc}},
     {SOIL_MOISTURE, {ATTRID_MS_THRESHOLD, ZCL_UINT16, RW, (void *)&zclApp_Config.Threshold}},
     {SOIL_MOISTURE, {ATTRID_MS_INTERVAL,  ZCL_UINT16, RW, (void *)&zclApp_Config.Interval}},
 
@@ -135,5 +142,7 @@ SimpleDescriptionFormat_t zclApp_FirstEP = {
 
 void zclApp_ResetAttributesToDefaultValues(void) {
     zclApp_Config.Threshold =     DEFAULT_Threshold;
-    zclApp_Config.Interval =     DEFAULT_Interval;
+    zclApp_Config.Interval  =     DEFAULT_Interval;
+    zclApp_Config.Power     =     DEFAULT_Power;
+    
 }

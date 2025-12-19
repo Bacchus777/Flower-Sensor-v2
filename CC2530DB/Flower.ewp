@@ -2588,7 +2588,8 @@
                 <option>
                     <name>CCDefines</name>
                     <state>HAL_BOARD_FLOWER</state>
-                    <state>HAL_PA_LNA</state>
+                    <state>HAL_PA_LNA_CC2592</state>
+                    <state>HAL_PA_LNA_CC2592_ALT</state>
                 </option>
                 <option>
                     <name>CCPreprocFile</name>

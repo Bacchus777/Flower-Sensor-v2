@@ -50,10 +50,17 @@
 #define TSENS_DIR P1DIR
 
 #define SOIL_MOISTURE_PORT 0
-#define SOIL_MOISTURE_PIN 3
-
 #define LUMOISITY_PORT 0
+
+#if defined(HAL_PA_LNA_CC2592) 
+#define SOIL_MOISTURE_PIN 3
+#define LUMOISITY_PIN 6
+#else
+#define SOIL_MOISTURE_PIN 4
 #define LUMOISITY_PIN 7
+#endif                                                     
+
+
 
 
 #if defined(HAL_BOARD_FLOWER)
