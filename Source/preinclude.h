@@ -73,13 +73,6 @@
 #endif
 
 
-//i2c bme280
-#define OCM_CLK_PORT 0
-#define OCM_DATA_PORT 0
-#define OCM_CLK_PIN 5
-#define OCM_DATA_PIN 6
-
-
 #ifdef DO_DEBUG_UART
 #define HAL_UART TRUE
 #define HAL_UART_DMA 1

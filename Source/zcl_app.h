@@ -20,7 +20,7 @@ extern "C" {
 #define APP_REPORT_EVT                  0x0001
 #define APP_READ_SENSORS_EVT            0x0002
 #define APP_SAVE_ATTRS_EVT              0x0004
-
+#define APP_DISABLE_POLL_EVT            0x0008
 #define NW_APP_CONFIG                   0x0402
 
 
@@ -55,12 +55,13 @@ extern "C" {
 #define ZCL_BOOLEAN     ZCL_DATATYPE_BOOLEAN
 
 
-#define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_RAW_ADC              0x0200
-#define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_BATTERY_RAW_ADC      0x0201
+//#define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_RAW_ADC              0x0200
+//#define ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE_BATTERY_RAW_ADC      0x0201
 #define ATTRID_MS_THRESHOLD                                             0x0202
 #define ATTRID_MS_INTERVAL                                              0x0203
 #define ATTRID_POWER_TX_POWER                                           0x0204
-
+#define ATTRID_POWER_POLL                                               0x0205
+#define ATTRID_MS_THERMCOMP                                             0x0206
 /*********************************************************************
  * TYPEDEFS
  */
@@ -69,6 +70,8 @@ typedef struct {
     uint16    Threshold;
     uint16    Interval;
     int8      Power;
+    bool      Poll;
+    bool      ThermComp;
 } application_config_t;
 
 

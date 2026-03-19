@@ -50,22 +50,19 @@
     do {                                                                                                                                   \
         HAL_TURN_ON_LED4();                                                                                                                \
         st(T3CTL |= BV(4););                                                                                                               \
-        IO_PUD_PORT(OCM_CLK_PORT, IO_PUP);                                                                                                 \
-        IO_PUD_PORT(OCM_DATA_PORT, IO_PUP);                                                                                                \
         IO_PUD_PORT(DS18B20_PORT, IO_PUP);                                                                                                 \
     } while (0)
 #define POWER_OFF_SENSORS()                                                                                                                \
     do {                                                                                                                                   \
         HAL_TURN_OFF_LED4();                                                                                                               \
         st(T3CTL &= ~BV(4); T3CTL |= BV(2););                                                                                              \
-        IO_PUD_PORT(OCM_CLK_PORT, IO_PDN);                                                                                                 \
-        IO_PUD_PORT(OCM_DATA_PORT, IO_PDN);                                                                                                \
         IO_PUD_PORT(DS18B20_PORT, IO_PDN);                                                                                                 \
     } while (0)
 
 /*********************************************************************
  * CONSTANTS
  */
+#define TEMPDEF     250
 
 /*********************************************************************
  * TYPEDEFS
@@ -90,6 +87,9 @@ afAddrType_t inderect_DstAddr = {.addrMode = (afAddrMode_t)AddrNotPresent, .endP
 
 static uint8 currentSensorsReadingPhase = 0;
 
+static int16_t tempreal;
+
+
 /*********************************************************************
  * LOCAL FUNCTIONS
  */
@@ -105,229 +105,341 @@ static void zclApp_ReadSensors(void);
 static void zclApp_ReadDS18B20(void);
 static void zclApp_ReadLumosity(void);
 static void zclApp_ReadSoilHumidity(void);
+#if !defined(HAL_YANDEX)
 static void zclApp_ReadOnOff(void);
+static void zclApp_DisablePollRate(void);
+#endif
 static void zclApp_InitPWM(void);
 
 /*********************************************************************
  * ZCL General Profile Callback table
  */
+static void _delay_us(uint16 microSecs) {
+  while (microSecs--) {
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+    asm("NOP");
+  }
+}
+
+void user_delay_ms(uint32_t period) { _delay_us(1000 * period); }
+
+
 static zclGeneral_AppCallbacks_t zclApp_CmdCallbacks = {
-    zclApp_BasicResetCB, // Basic Cluster Reset command
-    NULL, // Identify Trigger Effect command
-    NULL, // On/Off cluster commands
-    NULL, // On/Off cluster enhanced command Off with Effect
-    NULL, // On/Off cluster enhanced command On with Recall Global Scene
-    NULL, // On/Off cluster enhanced command On with Timed Off
-    NULL, // RSSI Location command
-    NULL  // RSSI Location Response command
+  zclApp_BasicResetCB, // Basic Cluster Reset command
+  NULL, // Identify Trigger Effect command
+  NULL, // On/Off cluster commands
+  NULL, // On/Off cluster enhanced command Off with Effect
+  NULL, // On/Off cluster enhanced command On with Recall Global Scene
+  NULL, // On/Off cluster enhanced command On with Timed Off
+  NULL, // RSSI Location command
+  NULL  // RSSI Location Response command
 };
 
 void zclApp_Init(byte task_id) {
-    IO_IMODE_PORT_PIN(SOIL_MOISTURE_PORT, SOIL_MOISTURE_PIN, IO_TRI); // tri state p0.4 (soil humidity pin)
-    IO_IMODE_PORT_PIN(LUMOISITY_PORT, LUMOISITY_PIN, IO_TRI);         // tri state p0.6 (lumosity pin)
-    IO_PUD_PORT(OCM_CLK_PORT, IO_PUP);
-    IO_PUD_PORT(OCM_DATA_PORT, IO_PUP)
-    IO_PUD_PORT(DS18B20_PORT, IO_PUP);
-    POWER_OFF_SENSORS();
+  IO_IMODE_PORT_PIN(SOIL_MOISTURE_PORT, SOIL_MOISTURE_PIN, IO_TRI); // tri state p0.4 (soil humidity pin)
+  IO_IMODE_PORT_PIN(LUMOISITY_PORT, LUMOISITY_PIN, IO_TRI);         // tri state p0.6 (lumosity pin)
+  IO_PUD_PORT(DS18B20_PORT, IO_PUP);
+  POWER_OFF_SENSORS();
 
-    zclApp_InitPWM();
-    // this is important to allow connects throught routers
-    // to make this work, coordinator should be compiled with this flag #define TP2_LEGACY_ZC
-    requestNewTrustCenterLinkKey = FALSE;
+  zclApp_InitPWM();
+  // this is important to allow connects throught routers
+  // to make this work, coordinator should be compiled with this flag #define TP2_LEGACY_ZC
+  requestNewTrustCenterLinkKey = FALSE;
 
-    zclApp_TaskID = task_id;
+  zclApp_TaskID = task_id;
 
-    zclGeneral_RegisterCmdCallbacks(1, &zclApp_CmdCallbacks);
-    zcl_registerAttrList(zclApp_FirstEP.EndPoint, zclApp_AttrsFirstEPCount, zclApp_AttrsFirstEP);
-    bdb_RegisterSimpleDescriptor(&zclApp_FirstEP);
+  zclGeneral_RegisterCmdCallbacks(1, &zclApp_CmdCallbacks);
+  zcl_registerAttrList(zclApp_FirstEP.EndPoint, zclApp_AttrsFirstEPCount, zclApp_AttrsFirstEP);
+  bdb_RegisterSimpleDescriptor(&zclApp_FirstEP);
 
-    zcl_registerForMsg(zclApp_TaskID);
+  zcl_registerForMsg(zclApp_TaskID);
 
-    zcl_registerReadWriteCB(1, NULL, zclApp_ReadWriteAuthCB);
+  zcl_registerReadWriteCB(1, NULL, zclApp_ReadWriteAuthCB);
 
-    zclApp_RestoreAttributesFromNV();
-    // Register for all key events - This app will handle all key events
-    RegisterForKeys(zclApp_TaskID);
-    LREP("Started build %s \r\n", zclApp_DateCodeNT);
-    
+  zclApp_RestoreAttributesFromNV();
+  // Register for all key events - This app will handle all key events
+  RegisterForKeys(zclApp_TaskID);
+  LREP("Started build %s \r\n", zclApp_DateCodeNT);
 
-
-    osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, ((uint32) zclApp_Config.Interval * 60 * 1000));
+  osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, ((uint32) zclApp_Config.Interval * 60 * 1000));
 }
 
 uint16 zclApp_event_loop(uint8 task_id, uint16 events) {
-    afIncomingMSGPacket_t *MSGpkt;
+  afIncomingMSGPacket_t *MSGpkt;
 
-    (void)task_id; // Intentionally unreferenced parameter
-    if (events & SYS_EVENT_MSG) {
-        while ((MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive(zclApp_TaskID))) {
-            switch (MSGpkt->hdr.event) {
-            case KEY_CHANGE:
-                zclApp_HandleKeys(((keyChange_t *)MSGpkt)->state, ((keyChange_t *)MSGpkt)->keys);
-                break;
-            case ZCL_INCOMING_MSG:
-                if (((zclIncomingMsg_t *)MSGpkt)->attrCmd) {
-                    osal_mem_free(((zclIncomingMsg_t *)MSGpkt)->attrCmd);
-                }
-                break;
-
-            default:
-                break;
-            }
-            // Release the memory
-            osal_msg_deallocate((uint8 *)MSGpkt);
+  (void)task_id; // Intentionally unreferenced parameter
+  if (events & SYS_EVENT_MSG) {
+    while ((MSGpkt = (afIncomingMSGPacket_t *)osal_msg_receive(zclApp_TaskID))) {
+      switch (MSGpkt->hdr.event) {
+      case KEY_CHANGE:
+        zclApp_HandleKeys(((keyChange_t *)MSGpkt)->state, ((keyChange_t *)MSGpkt)->keys);
+        break;
+      case ZCL_INCOMING_MSG:
+        if (((zclIncomingMsg_t *)MSGpkt)->attrCmd) {
+            osal_mem_free(((zclIncomingMsg_t *)MSGpkt)->attrCmd);
         }
-        // return unprocessed events
-        return (events ^ SYS_EVENT_MSG);
-    }
+        break;
 
-    if (events & APP_REPORT_EVT) {
-        LREPMaster("APP_REPORT_EVT\r\n");
-        zclApp_Report();
-        return (events ^ APP_REPORT_EVT);
+      default:
+        break;
+      }
+      // Release the memory
+      osal_msg_deallocate((uint8 *)MSGpkt);
     }
+    // return unprocessed events
+    return (events ^ SYS_EVENT_MSG);
+  }
 
-    if (events & APP_READ_SENSORS_EVT) {
-        LREPMaster("APP_READ_SENSORS_EVT\r\n");
-        zclApp_ReadSensors();
-        return (events ^ APP_READ_SENSORS_EVT);
-    }
-    if (events & APP_SAVE_ATTRS_EVT) {
-        LREPMaster("APP_SAVE_ATTRS_EVT\r\n");
-        zclApp_SaveAttributesToNV();
-        return (events ^ APP_SAVE_ATTRS_EVT);
-    }
+  if (events & APP_REPORT_EVT) {
+    LREPMaster("APP_REPORT_EVT\r\n");
+    zclApp_Report();
+    return (events ^ APP_REPORT_EVT);
+  }
 
-    // Discard unknown events
-    return 0;
+  if (events & APP_READ_SENSORS_EVT) {
+    LREPMaster("APP_READ_SENSORS_EVT\r\n");
+    zclApp_ReadSensors();
+    return (events ^ APP_READ_SENSORS_EVT);
+  }
+  if (events & APP_SAVE_ATTRS_EVT) {
+    LREPMaster("APP_SAVE_ATTRS_EVT\r\n");
+    zclApp_SaveAttributesToNV();
+    return (events ^ APP_SAVE_ATTRS_EVT);
+  }
+  if (events & APP_DISABLE_POLL_EVT) {
+    LREPMaster("APP_DISABLE_POLL_EVT\r\n");
+    zclApp_DisablePollRate();
+    return (events ^ APP_DISABLE_POLL_EVT);
+  }
+
+  // Discard unknown events
+  return 0;
 }
 
+#if !defined(HAL_YANDEX)
+static void zclApp_DisablePollRate(void) {
+  zclApp_Config.Poll = FALSE;
+  NLME_SetPollRate(0);      
+
+zclReportCmd_t *pReportCmd;
+  pReportCmd = osal_mem_alloc(sizeof(zclReportCmd_t) + (1 * sizeof(zclReport_t)));
+  if (pReportCmd != NULL) {
+    pReportCmd->numAttr = 1;
+    pReportCmd->attrList[0].attrID = ATTRID_POWER_POLL;
+    pReportCmd->attrList[0].dataType = ZCL_BOOLEAN;
+    pReportCmd->attrList[0].attrData = (void *)(&zclApp_Config.Poll);
+    zcl_SendReportCmd(zclApp_FirstEP.EndPoint, &inderect_DstAddr, POWER_CFG, pReportCmd, ZCL_FRAME_SERVER_CLIENT_DIR, true, bdb_getZCLFrameCounter());
+  }
+  osal_mem_free(pReportCmd);
+
+  osal_stop_timerEx(zclApp_TaskID, APP_DISABLE_POLL_EVT);
+  osal_clear_event(zclApp_TaskID, APP_DISABLE_POLL_EVT);
+  zclApp_SaveAttributesToNV();
+}
+#endif
+
 static void zclApp_BasicResetCB(void) {
-    LREPMaster("BasicResetCB\r\n");
-    zclApp_ResetAttributesToDefaultValues();
-    zclApp_SaveAttributesToNV();
+  LREPMaster("BasicResetCB\r\n");
+  zclApp_ResetAttributesToDefaultValues();
+  zclApp_SaveAttributesToNV();
 }
 
 static void zclApp_HandleKeys(byte portAndAction, byte keyCode) {
-    LREP("zclApp_HandleKeys portAndAction=0x%X keyCode=0x%X\r\n", portAndAction, keyCode);
-    zclFactoryResetter_HandleKeys(portAndAction, keyCode);
-    zclCommissioning_HandleKeys(portAndAction, keyCode);
-    if (portAndAction & HAL_KEY_PRESS) {
-        LREPMaster("Key press\r\n");
-        osal_start_timerEx(zclApp_TaskID, APP_REPORT_EVT, 200);
-    }
+  LREP("zclApp_HandleKeys portAndAction=0x%X keyCode=0x%X\r\n", portAndAction, keyCode);
+  zclFactoryResetter_HandleKeys(portAndAction, keyCode);
+  zclCommissioning_HandleKeys(portAndAction, keyCode);
+  if (portAndAction & HAL_KEY_PRESS) {
+    LREPMaster("Key press\r\n");
+    osal_start_timerEx(zclApp_TaskID, APP_REPORT_EVT, 200);
+  }
 }
 
 static ZStatus_t zclApp_ReadWriteAuthCB(afAddrType_t *srcAddr, zclAttrRec_t *pAttr, uint8 oper) {
-    LREPMaster("AUTH CB called\r\n");
-    osal_start_timerEx(zclApp_TaskID, APP_SAVE_ATTRS_EVT, 2000);
-    return ZSuccess;
+  LREPMaster("AUTH CB called\r\n");
+  osal_start_timerEx(zclApp_TaskID, APP_SAVE_ATTRS_EVT, 2000);
+  return ZSuccess;
 }
 
 static void zclApp_SaveAttributesToNV(void) {
-    uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
-    LREP("Saving attributes to NV write=%d\r\n", writeStatus);
-    osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, ((uint32) zclApp_Config.Interval * 60 * 1000));
-    LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
+  uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
+  LREP("Saving attributes to NV write=%d\r\n", writeStatus);
+  osal_start_reload_timer(zclApp_TaskID, APP_REPORT_EVT, ((uint32) zclApp_Config.Interval * 60 * 1000));
+  LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
 #if defined(HAL_PA_LNA_CC2592) 
-    if (zclApp_Config.Power == 10) 
-        ZMacSetTransmitPower(TX_PWR_PLUS_10);
-    else
-        ZMacSetTransmitPower(TX_PWR_PLUS_19);
+  if (zclApp_Config.Power == 10) 
+    ZMacSetTransmitPower(TX_PWR_PLUS_10);
+  else
+    ZMacSetTransmitPower(TX_PWR_PLUS_19);
 #endif
+  if (zclApp_Config.Poll == TRUE){
+    NLME_SetPollRate(6000);
+    osal_start_reload_timer(zclApp_TaskID, APP_DISABLE_POLL_EVT, (uint32)5*60000); 
+  }
+  else {
+    NLME_SetPollRate(0);      
+  }    
 }
 
 static void zclApp_RestoreAttributesFromNV(void) {
-    uint8 status = osal_nv_item_init(NW_APP_CONFIG, sizeof(application_config_t), NULL);
-    LREP("Restoring attributes from NV  status=%d \r\n", status);
-    if (status == NV_ITEM_UNINIT) {
-        uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
-        LREP("NV was empty, writing %d\r\n", writeStatus);
-    }
-    if (status == ZSUCCESS) {
-        LREPMaster("Reading from NV\r\n");
-        osal_nv_read(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
-    LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
-    }
+  uint8 status = osal_nv_item_init(NW_APP_CONFIG, sizeof(application_config_t), NULL);
+  LREP("Restoring attributes from NV  status=%d \r\n", status);
+  if (status == NV_ITEM_UNINIT) {
+    uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
+    LREP("NV was empty, writing %d\r\n", writeStatus);
+  }
+  if (status == ZSUCCESS) {
+    LREPMaster("Reading from NV\r\n");
+    osal_nv_read(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
+  LREP("zclApp_Config.Power=%d\r\n", zclApp_Config.Power);
+  }
 }
 
 static void zclApp_InitPWM(void) {
 #if defined(HAL_PA_LNA_CC2592) 
-    PERCFG |= 0x20; // Select Timer 3 Alternative 1 location
+  PERCFG |= 0x20; // Select Timer 3 Alternative 1 location
 #else
-    PERCFG &= ~(0x20); // Select Timer 3 Alternative 2 location
+  PERCFG &= ~(0x20); // Select Timer 3 Alternative 2 location
 #endif
                                 
-    P2SEL |= 0x20;
-    P2DIR |= 0xC0;  // Give priority to Timer 1 channel2-3
+  P2SEL |= 0x20;
+  P2DIR |= 0xC0;  // Give priority to Timer 1 channel2-3
 
 #if defined(HAL_PA_LNA_CC2592) 
-    P1SEL |= BV(7); // Set P1_7 to peripheral, Timer 1,channel 1
-    P1DIR |= BV(7);
+  P1SEL |= BV(7); // Set P1_7 to peripheral, Timer 1,channel 1
+  P1DIR |= BV(7);
 #else
-    P1SEL |= BV(4); // Set P1_4 to peripheral, Timer 1,channel 2
-    P1DIR |= BV(4);
+  P1SEL |= BV(4); // Set P1_4 to peripheral, Timer 1,channel 2
+  P1DIR |= BV(4);
 #endif                                                     
     
-    T3CTL &= ~BV(4); // Stop timer 3 (if it was running)
-    T3CTL |= BV(2);  // Clear timer 3
-    T3CTL &= ~0x08;  // Disable Timer 3 overflow interrupts
-    T3CTL |= 0x03;   // Timer 3 mode = 3 - Up/Down
+  T3CTL &= ~BV(4); // Stop timer 3 (if it was running)
+  T3CTL |= BV(2);  // Clear timer 3
+  T3CTL &= ~0x08;  // Disable Timer 3 overflow interrupts
+  T3CTL |= 0x03;   // Timer 3 mode = 3 - Up/Down
 
-    T3CCTL1 &= ~0x40; // Disable channel 0 interrupts
-    T3CCTL1 |= BV(2); // Ch0 mode = compare
-    T3CCTL1 |= BV(4); // Ch0 output compare mode = toggle on compare
+  T3CCTL1 &= ~0x40; // Disable channel 0 interrupts
+  T3CCTL1 |= BV(2); // Ch0 mode = compare
+  T3CCTL1 |= BV(4); // Ch0 output compare mode = toggle on compare
 
-    T3CTL &= ~(BV(7) | BV(6) | BV(5)); // Clear Prescaler divider value
-    T3CC0 = 4;                         // Set ticks
+  T3CTL &= ~(BV(7) | BV(6) | BV(5)); // Clear Prescaler divider value
+  T3CC0 = 4;                         // Set ticks
 }
 
 static void zclApp_ReadSensors(void) {
-    LREP("currentSensorsReadingPhase %d\r\n", currentSensorsReadingPhase);
-    /**
-     * FYI: split reading sensors into phases, so single call wouldn't block processor
-     * for extensive ammount of time
-     * */
-    HalLedSet(HAL_LED_1, HAL_LED_MODE_BLINK);
-    switch (currentSensorsReadingPhase++) {
-    case 0:
-        POWER_ON_SENSORS();
-        zclApp_ReadLumosity();
-        break;
-    case 1:
-        zclBattery_Report();
-        zclApp_ReadSoilHumidity();
-        break;
-    case 2:
-        zclApp_ReadDS18B20();
-        break;
-    case 3:
-        zclApp_ReadOnOff();
-        break;
-    default:
-        POWER_OFF_SENSORS();
-        currentSensorsReadingPhase = 0;
-        break;
-    }
-    LREP("currentSensorsReadingPhase %d\r\n", currentSensorsReadingPhase);
-    if (currentSensorsReadingPhase != 0) {
-        osal_start_timerEx(zclApp_TaskID, APP_READ_SENSORS_EVT, 10);
-    }
+  LREP("currentSensorsReadingPhase %d\r\n", currentSensorsReadingPhase);
+  /**
+   * FYI: split reading sensors into phases, so single call wouldn't block processor
+   * for extensive ammount of time
+   * */
+  HalLedSet(HAL_LED_1, HAL_LED_MODE_BLINK);
+  switch (currentSensorsReadingPhase++) {
+  case 0:
+    POWER_ON_SENSORS();
+    osal_pwrmgr_task_state(zclApp_TaskID, PWRMGR_CONSERVE);
+    zclApp_ReadLumosity();
+    break;
+  case 1:
+    zclBattery_Report();
+    zclApp_ReadSoilHumidity();
+    break;
+  case 2:
+    zclApp_ReadDS18B20();
+    break;
+#if !defined(HAL_YANDEX)
+  case 3:
+    zclApp_ReadOnOff();
+    break;
+#endif
+  default:
+    POWER_OFF_SENSORS();
+    currentSensorsReadingPhase = 0;
+    break;
+  }
+  LREP("currentSensorsReadingPhase %d\r\n", currentSensorsReadingPhase);
+  if (currentSensorsReadingPhase != 0) {
+    osal_start_timerEx(zclApp_TaskID, APP_READ_SENSORS_EVT, 10);
+  }
 }
 
 static void zclApp_ReadSoilHumidity(void) {
-    zclApp_SoilHumiditySensor_MeasuredValueRawAdc = adcReadSampled(SOIL_MOISTURE_PIN, HAL_ADC_RESOLUTION_14, HAL_ADC_REF_AVDD, 5);
-    // FYI: https://docs.google.com/spreadsheets/d/1qrFdMTo0ZrqtlGUoafeB3hplhU3GzDnVWuUK4M9OgNo/edit?usp=sharing
-    uint16 soilHumidityMinRangeAir = (uint16)AIR_COMPENSATION_FORMULA(zclBattery_RawAdc);
-    uint16 soilHumidityMaxRangeWater = (uint16)WATER_COMPENSATION_FORMULA(zclBattery_RawAdc);
-    LREP("soilHumidityMinRangeAir=%d soilHumidityMaxRangeWater=%d\r\n", soilHumidityMinRangeAir, soilHumidityMaxRangeWater);
-    zclApp_SoilHumiditySensor_MeasuredValue =
-        (uint16)mapRange(soilHumidityMinRangeAir, soilHumidityMaxRangeWater, 0.0, 10000.0, zclApp_SoilHumiditySensor_MeasuredValueRawAdc);
-    LREP("ReadSoilHumidity raw=%d mapped=%d\r\n", zclApp_SoilHumiditySensor_MeasuredValueRawAdc, zclApp_SoilHumiditySensor_MeasuredValue);
+  zclBattery_RawAdc = adcReadSampled(HAL_ADC_CHANNEL_VDD, 
+                                    HAL_ADC_RESOLUTION_14, 
+                                    HAL_ADC_REF_125V, 
+                                    3);
+  HalAdcSetReference(HAL_ADC_REF_AVDD);
+  
+  uint32 soilSum = 0;
+  for (uint8 i = 0; i < 3; i++) {
+      HalAdcRead(SOIL_MOISTURE_PIN, HAL_ADC_RESOLUTION_14);
+      soilSum += HalAdcRead(SOIL_MOISTURE_PIN, HAL_ADC_RESOLUTION_14);
+      if (i < 2) {
+          _delay_us(500);
+      }
+  }
+  zclApp_SoilHumiditySensor_MeasuredValueRawAdc = (uint16)(soilSum / 3);
+  // 0.198 * ADC + 3597.759 = (ADC * 198 + 3597759) / 1000
+  uint32 dry_calc = (uint32)zclBattery_RawAdc * 198 + 3597759;
+  // 0.171 * ADC + 2060.895 = (ADC * 171 + 2060895) / 1000
+  uint32 wet_calc = (uint32)zclBattery_RawAdc * 171 + 2060895;
+  
+  uint16 dry = (uint16)(dry_calc / 1000); 
+  uint16 wet = (uint16)(wet_calc / 1000);
+  
+  int32 compensatedAdc = zclApp_SoilHumiditySensor_MeasuredValueRawAdc;
+#if !defined(HAL_YANDEX)
+  if (zclApp_Config.ThermComp) {
+#endif
+    int16 tempDiff = tempreal - TEMPDEF;
+    int16 tempComp = (tempDiff * 420) / 100;  // coefficient 0.42
+    compensatedAdc -= tempComp;
+    if (compensatedAdc < 0) compensatedAdc = 0;
+#if !defined(HAL_YANDEX)
+  }
+#endif
+  
+  if (dry > wet && compensatedAdc < dry && compensatedAdc > wet) {
+    uint32 diff = dry - wet;
+    uint32 value = dry - compensatedAdc;
+    zclApp_SoilHumiditySensor_MeasuredValue = (uint16)((value * 10000UL) / diff);
+  } else if (compensatedAdc >= dry) {
+    zclApp_SoilHumiditySensor_MeasuredValue = 0;
+  } else if (compensatedAdc <= wet) {
+    zclApp_SoilHumiditySensor_MeasuredValue = 10000;
+  } else {
+      zclApp_SoilHumiditySensor_MeasuredValue = 5000;
+  }
 
-    bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, SOIL_MOISTURE, ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE);
+#if defined(HAL_YANDEX)
+  const uint8 NUM_ATTRIBUTES = 1;
+  zclReportCmd_t *pReportCmd;
+
+  pReportCmd = osal_mem_alloc(sizeof(zclReportCmd_t) + (NUM_ATTRIBUTES * sizeof(zclReport_t)));
+  if (pReportCmd != NULL) {
+    pReportCmd->numAttr = NUM_ATTRIBUTES;
+
+    pReportCmd->attrList[0].attrID = ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE;
+    pReportCmd->attrList[0].dataType = ZCL_UINT16;
+    pReportCmd->attrList[0].attrData = (void *)(&zclApp_SoilHumiditySensor_MeasuredValue);
+
+    afAddrType_t inderect_DstAddr = {.addrMode = (afAddrMode_t)AddrNotPresent, .endPoint = 1, .addr.shortAddr = 0};
+    zcl_SendReportCmd(zclApp_FirstEP.EndPoint, &inderect_DstAddr, HUMIDITY, pReportCmd, ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, bdb_getZCLFrameCounter());
+  }
+
+  osal_mem_free(pReportCmd);
+#else
+  bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, SOIL_MOISTURE, ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE);
+#endif
+  
 }
 
+
+#if !defined(HAL_YANDEX)
 static void zclApp_ReadOnOff(void) {
   LREP("zclApp_SoilHumiditySensor_MeasuredValue=%d\r\n", zclApp_SoilHumiditySensor_MeasuredValue);
   LREP("zclApp_Config.Threshold=%d\r\n", zclApp_Config.Threshold);
@@ -335,40 +447,72 @@ static void zclApp_ReadOnOff(void) {
   if (zclApp_SoilHumiditySensor_Output) {
     zclGeneral_SendOnOff_CmdOn(zclApp_FirstEP.EndPoint, &inderect_DstAddr, TRUE, bdb_getZCLFrameCounter());
   }
+
 }
+#endif
 
 static void zclApp_ReadDS18B20(void) {
-    int16 temp = readTemperature();
-    if (temp != 1) {
-        zclApp_DS18B20_MeasuredValue = temp;
-        LREP("ReadDS18B20 t=%d\r\n", zclApp_DS18B20_MeasuredValue);
-        bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, TEMP, ATTRID_MS_TEMPERATURE_MEASURED_VALUE);
-    } else {
-        LREPMaster("ReadDS18B20 error\r\n");
+  int16 temp = readTemperature();
+  if (temp != 1) {
+    zclApp_DS18B20_MeasuredValue = temp;
+    LREP("ReadDS18B20 t=%d\r\n", zclApp_DS18B20_MeasuredValue);
+    tempreal = temp/10;
+
+#if defined(HAL_YANDEX)
+    const uint8 NUM_ATTRIBUTES = 1;
+    zclReportCmd_t *pReportCmd;
+
+    pReportCmd = osal_mem_alloc(sizeof(zclReportCmd_t) + (NUM_ATTRIBUTES * sizeof(zclReport_t)));
+    if (pReportCmd != NULL) {
+      pReportCmd->numAttr = NUM_ATTRIBUTES;
+
+      pReportCmd->attrList[0].attrID = ATTRID_MS_TEMPERATURE_MEASURED_VALUE;
+      pReportCmd->attrList[0].dataType = ZCL_INT16;
+      pReportCmd->attrList[0].attrData = (void *)(&zclApp_DS18B20_MeasuredValue);
+
+      afAddrType_t inderect_DstAddr = {.addrMode = (afAddrMode_t)AddrNotPresent, .endPoint = 1, .addr.shortAddr = 0};
+      zcl_SendReportCmd(zclApp_FirstEP.EndPoint, &inderect_DstAddr, TEMP, pReportCmd, ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, bdb_getZCLFrameCounter());
     }
+
+    osal_mem_free(pReportCmd);
+    
+#else
+    bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, TEMP, ATTRID_MS_TEMPERATURE_MEASURED_VALUE);
+#endif
+
+  } else {
+    LREPMaster("ReadDS18B20 error\r\n");
+  }
 }
 
 static void zclApp_ReadLumosity(void) {
-    zclApp_IlluminanceSensor_MeasuredValueRawAdc = adcReadSampled(LUMOISITY_PIN, HAL_ADC_RESOLUTION_14, HAL_ADC_REF_AVDD, 5);
-    zclApp_IlluminanceSensor_MeasuredValue = zclApp_IlluminanceSensor_MeasuredValueRawAdc * 5;
-    bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, ILLUMINANCE, ATTRID_MS_ILLUMINANCE_MEASURED_VALUE);
-    LREP("IlluminanceSensor_MeasuredValue value=%d\r\n", zclApp_IlluminanceSensor_MeasuredValue);
-}
+  zclApp_IlluminanceSensor_MeasuredValueRawAdc = adcReadSampled(LUMOISITY_PIN, HAL_ADC_RESOLUTION_14, HAL_ADC_REF_AVDD, 5);
+  zclApp_IlluminanceSensor_MeasuredValue = zclApp_IlluminanceSensor_MeasuredValueRawAdc * 5;
+    
+#if defined(HAL_YANDEX)
+  const uint8 NUM_ATTRIBUTES = 1;
 
-static void _delay_us(uint16 microSecs) {
-    while (microSecs--) {
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-        asm("NOP");
-    }
-}
+  zclReportCmd_t *pReportCmd;
 
-void user_delay_ms(uint32_t period) { _delay_us(1000 * period); }
+  pReportCmd = osal_mem_alloc(sizeof(zclReportCmd_t) + (NUM_ATTRIBUTES * sizeof(zclReport_t)));
+  if (pReportCmd != NULL) {
+    pReportCmd->numAttr = NUM_ATTRIBUTES;
+
+    pReportCmd->attrList[0].attrID = ATTRID_MS_ILLUMINANCE_MEASURED_VALUE;
+    pReportCmd->attrList[0].dataType = ZCL_UINT16;
+    pReportCmd->attrList[0].attrData = (void *)(&zclApp_IlluminanceSensor_MeasuredValue);
+
+    afAddrType_t inderect_DstAddr = {.addrMode = (afAddrMode_t)AddrNotPresent, .endPoint = 1, .addr.shortAddr = 0};
+    zcl_SendReportCmd(zclApp_FirstEP.EndPoint, &inderect_DstAddr, ILLUMINANCE, pReportCmd, ZCL_FRAME_SERVER_CLIENT_DIR, TRUE, bdb_getZCLFrameCounter());
+  }
+
+  osal_mem_free(pReportCmd);
+
+#else
+  bdb_RepChangedAttrValue(zclApp_FirstEP.EndPoint, ILLUMINANCE, ATTRID_MS_ILLUMINANCE_MEASURED_VALUE);
+#endif
+  LREP("IlluminanceSensor_MeasuredValue value=%d\r\n", zclApp_IlluminanceSensor_MeasuredValue);
+}
 
 static void zclApp_Report(void) { osal_start_timerEx(zclApp_TaskID, APP_READ_SENSORS_EVT, 10); }
 

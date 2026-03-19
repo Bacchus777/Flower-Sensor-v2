@@ -61,24 +61,32 @@ const uint8 zclApp_StackVersion = 4;
 
 //{lenght, 'd', 'a', 't', 'a'}
 const uint8 zclApp_ManufacturerName[] = {7, 'B', 'a', 'c', 'c', 'h', 'u', 's'};
-#if defined(HAL_PA_LNA_CC2592) 
-const uint8 zclApp_ModelId[] = {16, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '4'};
+#if defined(HAL_YANDEX)
+const uint8 zclApp_ModelId[] = {17, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '4', 'A'};
 #else
-const uint8 zclApp_ModelId[] = {16, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '2'};
+const uint8 zclApp_ModelId[] = {16, 'F', 'l', 'o', 'w', 'e', 'r', '_',  'S', 'e', 'n', 's', 'o', 'r', '_', 'v', '4'};
 #endif
 
 const uint8 zclApp_PowerSource = POWER_SOURCE_BATTERY;
 
 
 #define DEFAULT_Threshold       50
+#if defined(HAL_YANDEX)
+#define DEFAULT_Interval        30
+#else
 #define DEFAULT_Interval        10
+#endif
 #define DEFAULT_Power           TX_PWR_PLUS_10
+#define DEFAULT_Poll            FALSE
+#define DEFAULT_TrermComp       FALSE
 
 
 application_config_t zclApp_Config = {
-    .Threshold =      DEFAULT_Threshold,
-    .Interval  =      DEFAULT_Interval,
-    .Power     =      DEFAULT_Power
+  .Threshold =      DEFAULT_Threshold,
+  .Interval  =      DEFAULT_Interval,
+  .Power     =      DEFAULT_Power,
+  .Poll      =      DEFAULT_Poll,
+  .ThermComp =      DEFAULT_TrermComp
 };
 
 /*********************************************************************
@@ -87,36 +95,65 @@ application_config_t zclApp_Config = {
 
 
 CONST zclAttrRec_t zclApp_AttrsFirstEP[] = {
-    {BASIC, {ATTRID_BASIC_ZCL_VERSION, ZCL_UINT8, R, (void *)&zclApp_ZCLVersion}},
-    {BASIC, {ATTRID_BASIC_APPL_VERSION, ZCL_UINT8, R, (void *)&zclApp_ApplicationVersion}},
-    {BASIC, {ATTRID_BASIC_STACK_VERSION, ZCL_UINT8, R, (void *)&zclApp_StackVersion}},
-    {BASIC, {ATTRID_BASIC_HW_VERSION, ZCL_UINT8, R, (void *)&zclApp_HWRevision}},
-    {BASIC, {ATTRID_BASIC_MANUFACTURER_NAME, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_ManufacturerName}},
-    {BASIC, {ATTRID_BASIC_MODEL_ID, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_ModelId}},
-    {BASIC, {ATTRID_BASIC_DATE_CODE, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_DateCode}},
-    {BASIC, {ATTRID_BASIC_POWER_SOURCE, ZCL_DATATYPE_ENUM8, R, (void *)&zclApp_PowerSource}},
-    {BASIC, {ATTRID_BASIC_SW_BUILD_ID, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_DateCode}},
-    {BASIC, {ATTRID_CLUSTER_REVISION, ZCL_DATATYPE_UINT16, R, (void *)&zclApp_clusterRevision_all}},
+  {BASIC, {ATTRID_BASIC_ZCL_VERSION, ZCL_UINT8, R, (void *)&zclApp_ZCLVersion}},
+  {BASIC, {ATTRID_BASIC_APPL_VERSION, ZCL_UINT8, R, (void *)&zclApp_ApplicationVersion}},
+  {BASIC, {ATTRID_BASIC_STACK_VERSION, ZCL_UINT8, R, (void *)&zclApp_StackVersion}},
+  {BASIC, {ATTRID_BASIC_HW_VERSION, ZCL_UINT8, R, (void *)&zclApp_HWRevision}},
+  {BASIC, {ATTRID_BASIC_MANUFACTURER_NAME, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_ManufacturerName}},
+  {BASIC, {ATTRID_BASIC_MODEL_ID, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_ModelId}},
+  {BASIC, {ATTRID_BASIC_DATE_CODE, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_DateCode}},
+  {BASIC, {ATTRID_BASIC_POWER_SOURCE, ZCL_DATATYPE_ENUM8, R, (void *)&zclApp_PowerSource}},
+  {BASIC, {ATTRID_BASIC_SW_BUILD_ID, ZCL_DATATYPE_CHAR_STR, R, (void *)zclApp_DateCode}},
+  {BASIC, {ATTRID_CLUSTER_REVISION, ZCL_DATATYPE_UINT16, R, (void *)&zclApp_clusterRevision_all}},
 
-    {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE, ZCL_UINT8, RR, (void *)&zclBattery_Voltage}},
-    {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, ZCL_UINT8, RR, (void *)&zclBattery_PercentageRemainig}},
-    {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE_RAW_ADC, ZCL_UINT16, RR, (void *)&zclBattery_RawAdc}},
-#if defined(HAL_PA_LNA_CC2592) 
-    {POWER_CFG, {ATTRID_POWER_TX_POWER, ZCL_INT8, RW, (void *)&zclApp_Config.Power}},
+  {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE, ZCL_UINT8, RR, (void *)&zclBattery_Voltage}},
+  {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_PERCENTAGE_REMAINING, ZCL_UINT8, RR, (void *)&zclBattery_PercentageRemainig}},
+  {POWER_CFG, {ATTRID_POWER_CFG_BATTERY_VOLTAGE_RAW_ADC, ZCL_UINT16, RR, (void *)&zclBattery_RawAdc}},
+#if defined(HAL_PA_LNA_CC2592) && !defined(HAL_YANDEX)
+  {POWER_CFG, {ATTRID_POWER_TX_POWER, ZCL_INT8, RW, (void *)&zclApp_Config.Power}},
 #endif
-    {ILLUMINANCE, {ATTRID_MS_ILLUMINANCE_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_IlluminanceSensor_MeasuredValue}},
-    {TEMP, {ATTRID_MS_TEMPERATURE_MEASURED_VALUE, ZCL_INT16, RR, (void *)&zclApp_DS18B20_MeasuredValue}},
+    
+#if !defined(HAL_YANDEX)
+  {POWER_CFG, {ATTRID_POWER_POLL, ZCL_BOOLEAN, RW, (void *)&zclApp_Config.Poll}},
+#endif
 
-    {SOIL_MOISTURE, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_SoilHumiditySensor_MeasuredValue}},
-    {SOIL_MOISTURE, {ATTRID_MS_THRESHOLD, ZCL_UINT16, RW, (void *)&zclApp_Config.Threshold}},
-    {SOIL_MOISTURE, {ATTRID_MS_INTERVAL,  ZCL_UINT16, RW, (void *)&zclApp_Config.Interval}},
+  {ILLUMINANCE, {ATTRID_MS_ILLUMINANCE_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_IlluminanceSensor_MeasuredValue}},
+  {TEMP, {ATTRID_MS_TEMPERATURE_MEASURED_VALUE, ZCL_INT16, RR, (void *)&zclApp_DS18B20_MeasuredValue}},
 
-    {GEN_ON_OFF, {ATTRID_ON_OFF, ZCL_BOOLEAN, RR, (void *)&zclApp_SoilHumiditySensor_Output}},
+#if defined(HAL_YANDEX)
+  {HUMIDITY, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, ZCL_UINT16, R, (void *)&zclApp_SoilHumiditySensor_MeasuredValue}},
+#else    
+  {SOIL_MOISTURE, {ATTRID_MS_RELATIVE_HUMIDITY_MEASURED_VALUE, ZCL_UINT16, RR, (void *)&zclApp_SoilHumiditySensor_MeasuredValue}},
+  {SOIL_MOISTURE, {ATTRID_MS_THRESHOLD, ZCL_UINT16, RW, (void *)&zclApp_Config.Threshold}},
+  {SOIL_MOISTURE, {ATTRID_MS_INTERVAL,  ZCL_UINT16, RW, (void *)&zclApp_Config.Interval}},
+  {SOIL_MOISTURE, {ATTRID_MS_THERMCOMP,  ZCL_BOOLEAN , RW, (void *)&zclApp_Config.ThermComp}},
+#endif
+
+  {GEN_ON_OFF, {ATTRID_ON_OFF, ZCL_BOOLEAN, RR, (void *)&zclApp_SoilHumiditySensor_Output}},
 };
 
 
 uint8 CONST zclApp_AttrsFirstEPCount = (sizeof(zclApp_AttrsFirstEP) / sizeof(zclApp_AttrsFirstEP[0]));
 
+
+#if defined(HAL_YANDEX)
+const cId_t zclApp_InClusterListFirstEP[] = {ZCL_CLUSTER_ID_GEN_BASIC, POWER_CFG, ILLUMINANCE, TEMP, HUMIDITY};
+
+#define APP_MAX_INCLUSTERS_FIRST_EP (sizeof(zclApp_InClusterListFirstEP) / sizeof(zclApp_InClusterListFirstEP[0]))
+
+
+SimpleDescriptionFormat_t zclApp_FirstEP = {
+  1,                                                  //  int Endpoint;
+  ZCL_HA_PROFILE_ID,                                  //  uint16 AppProfId[2];
+  ZCL_HA_DEVICEID_SIMPLE_SENSOR,                      //  uint16 AppDeviceId[2];
+  APP_DEVICE_VERSION,                                 //  int   AppDevVer:4;
+  APP_FLAGS,                                          //  int   AppFlags:4;
+  APP_MAX_INCLUSTERS_FIRST_EP,                        //  byte  AppNumInClusters;
+  (cId_t *)zclApp_InClusterListFirstEP,               //  byte *pAppInClusterList;
+  0,                                                  //  byte  AppNumOutClusters;
+  (cId_t *)NULL                                       //  byte *pAppOutClusterList;  
+};
+#else
 
 const cId_t zclApp_InClusterListFirstEP[] = {ZCL_CLUSTER_ID_GEN_BASIC, POWER_CFG, ILLUMINANCE, TEMP, SOIL_MOISTURE};
 
@@ -127,22 +164,25 @@ const cId_t zclApp_OutClusterListFirstEP[] = {GEN_ON_OFF};
 #define APP_MAX_OUTCLUSTERS_FIRST_EP (sizeof(zclApp_OutClusterListFirstEP) / sizeof(zclApp_OutClusterListFirstEP[0]))
 
 SimpleDescriptionFormat_t zclApp_FirstEP = {
-    1,                                                  //  int Endpoint;
-    ZCL_HA_PROFILE_ID,                                  //  uint16 AppProfId[2];
-    ZCL_HA_DEVICEID_SIMPLE_SENSOR,                      //  uint16 AppDeviceId[2];
-    APP_DEVICE_VERSION,                                 //  int   AppDevVer:4;
-    APP_FLAGS,                                          //  int   AppFlags:4;
-    APP_MAX_INCLUSTERS_FIRST_EP,                        //  byte  AppNumInClusters;
-    (cId_t *)zclApp_InClusterListFirstEP,               //  byte *pAppInClusterList;
-    APP_MAX_OUTCLUSTERS_FIRST_EP,                       //  byte  AppNumOutClusters;
-    (cId_t *)zclApp_OutClusterListFirstEP               //  byte *pAppOutClusterList;  
+  1,                                                  //  int Endpoint;
+  ZCL_HA_PROFILE_ID,                                  //  uint16 AppProfId[2];
+  ZCL_HA_DEVICEID_SIMPLE_SENSOR,                      //  uint16 AppDeviceId[2];
+  APP_DEVICE_VERSION,                                 //  int   AppDevVer:4;
+  APP_FLAGS,                                          //  int   AppFlags:4;
+  APP_MAX_INCLUSTERS_FIRST_EP,                        //  byte  AppNumInClusters;
+  (cId_t *)zclApp_InClusterListFirstEP,               //  byte *pAppInClusterList;
+  APP_MAX_OUTCLUSTERS_FIRST_EP,                       //  byte  AppNumOutClusters;
+  (cId_t *)zclApp_OutClusterListFirstEP               //  byte *pAppOutClusterList;  
 };
-
+#endif
 
 
 void zclApp_ResetAttributesToDefaultValues(void) {
-    zclApp_Config.Threshold =     DEFAULT_Threshold;
-    zclApp_Config.Interval  =     DEFAULT_Interval;
-    zclApp_Config.Power     =     DEFAULT_Power;
-    
+  zclApp_Config.Threshold =     DEFAULT_Threshold;
+  zclApp_Config.Interval  =     DEFAULT_Interval;
+  zclApp_Config.Power     =     DEFAULT_Power;
+  zclApp_Config.Poll      =     DEFAULT_Poll;
+  zclApp_Config.ThermComp =     DEFAULT_TrermComp;
+  uint8 writeStatus = osal_nv_write(NW_APP_CONFIG, 0, sizeof(application_config_t), &zclApp_Config);
 }
+
